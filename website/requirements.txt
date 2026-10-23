@@ -4,7 +4,7 @@ numpy
 xgboost
 shap
 joblib
-scikit-learn
+scikit-learn==1.5.2
 matplotlib
 tensorflow
 pyarrow
