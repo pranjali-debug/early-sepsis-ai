@@ -7,4 +7,4 @@ joblib
 scikit-learn
 matplotlib
 tensorflow
-pyarroww
+pyarrow
