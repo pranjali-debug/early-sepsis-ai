@@ -81,13 +81,19 @@ with tab3:
     if uploaded:
         df = pd.read_csv(uploaded)
         features = joblib.load(MODELS / "lstm_features.joblib")
-        sample = pd.read_parquet(
-            sorted((DATA / "temporal_features").glob("batch_*.parquet"))[0]
-        )
-        xgb_features = [
-            c for c in sample.columns if c not in ["PatientID", "SepsisLabel"]
-        ]
 
+        xgb_features = [
+        "HR", "O2Sat", "Temp", "SBP", "MAP", "DBP", "Resp", "EtCO2",
+        "BaseExcess", "HCO3", "FiO2", "pH", "PaCO2", "SaO2", "AST",
+        "BUN", "Alkalinephos", "Calcium", "Chloride", "Creatinine",
+        "Bilirubin_direct", "Glucose", "Lactate", "Magnesium",
+        "Phosphate", "Potassium", "Bilirubin_total", "TroponinI",
+        "Hct", "Hgb", "PTT", "WBC", "Fibrinogen", "Platelets",
+        "Age", "Gender", "Unit1", "Unit2", "HospAdmTime", "ICULOS",
+        "HR_prev1", "HR_mean6", "O2Sat_prev1", "O2Sat_mean6",
+        "Temp_prev1", "Temp_mean6", "SBP_prev1", "SBP_mean6",
+        "MAP_prev1", "MAP_mean6", "Resp_prev1", "Resp_mean6"
+        ]
         if model_choice == "Tuned XGBoost":
             missing = sorted(set(xgb_features) - set(df.columns))
             if missing:
