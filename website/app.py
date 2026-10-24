@@ -154,11 +154,16 @@ with tab3:
                     "Absolute impact", ascending=False
                 ).head(10).sort_values("SHAP value")
 
-                # Positive and negative bars show direction of influence.
+                # Display the top features influencing this XGBoost prediction.
+                st.markdown("#### Feature Impact (Top 10)")
+                
                 st.bar_chart(
-                    explanation.set_index("Feature")["SHAP value"],
-                    horizontal=True
+                    explanation.head(10).set_index("Feature")["SHAP value"],
+                    horizontal=True,
+                    height=450
                 )
+                
+                # Explain how to interpret the SHAP values.
                 st.caption(
                     "Positive SHAP values push the model output higher; "
                     "negative values push it lower. These are contributions "
