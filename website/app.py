@@ -88,200 +88,172 @@ with tab2:
     )
 
 
+
+# TAB 3: Upload patient observations and generate predictions.
 with tab3:
-    st.subheader("Predict Sepsis Risk")
-
-    uploaded_file = st.file_uploader(
-        "Upload patient hourly data (CSV)",
-        type=["csv"],
-        key="risk_upload"
+    st.subheader("Predict from uploaded observations")
+    st.write(
+        "Upload a CSV containing the required model features. "
+        "LSTM requires at least 24 chronological hourly rows."
     )
 
-    model_choice = st.selectbox(
-        "Choose prediction model",
-        ["Tuned XGBoost", "LSTM"]
-    )
+    model_choice = st.selectbox("Model", ["Tuned XGBoost", "LSTM"])
+    uploaded = st.file_uploader("Upload feature CSV", type=["csv"])
 
-    if uploaded_file is not None:
-        data = pd.read_csv(uploaded_file)
+    if uploaded:
+        df = pd.read_csv(uploaded)
 
-        st.write("Uploaded data preview")
-        st.dataframe(data.head(), use_container_width=True)
+        # Load the features used by the trained LSTM model.
+        features = joblib.load(MODELS / "lstm_features.joblib")
+
+        # These 52 features must match the trained XGBoost model.
+        xgb_features = [
+            "HR", "O2Sat", "Temp", "SBP", "MAP", "DBP", "Resp", "EtCO2",
+            "BaseExcess", "HCO3", "FiO2", "pH", "PaCO2", "SaO2", "AST",
+            "BUN", "Alkalinephos", "Calcium", "Chloride", "Creatinine",
+            "Bilirubin_direct", "Glucose", "Lactate", "Magnesium",
+            "Phosphate", "Potassium", "Bilirubin_total", "TroponinI",
+            "Hct", "Hgb", "PTT", "WBC", "Fibrinogen", "Platelets",
+            "Age", "Gender", "Unit1", "Unit2", "HospAdmTime", "ICULOS",
+            "HR_prev1", "HR_mean6", "O2Sat_prev1", "O2Sat_mean6",
+            "Temp_prev1", "Temp_mean6", "SBP_prev1", "SBP_mean6",
+            "MAP_prev1", "MAP_mean6", "Resp_prev1", "Resp_mean6"
+        ]
 
         if model_choice == "Tuned XGBoost":
-            # Load the tuned XGBoost model and feature list.
-            model_path = os.path.join(
-                MODEL_DIR, "xgboost_tuned_candidate.json"
-            )
-            model = xgb.XGBClassifier()
-            model.load_model(model_path)
+            # Validate the CSV before running predictions.
+            missing = sorted(set(xgb_features) - set(df.columns))
 
-            features_path = os.path.join(
-                MODEL_DIR, "lstm_features.joblib"
-            )
-            # Use the XGBoost feature list if your project saves one.
-            if os.path.exists(
-                os.path.join(MODEL_DIR, "xgb_features.joblib")
-            ):
-                features = joblib.load(
-                    os.path.join(MODEL_DIR, "xgb_features.joblib")
-                )
+            if missing:
+                st.error(f"Missing required columns: {', '.join(missing)}")
             else:
-                st.error(
-                    "XGBoost feature list file is missing. "
-                    "Use your project's saved XGBoost feature list."
-                )
-                st.stop()
+                # Predict probabilities for every uploaded observation.
+                model = load_xgb()
+                X_input = df[xgb_features]
+                probability = model.predict_proba(X_input)[:, 1]
 
-            X = data.reindex(columns=features, fill_value=0)
-            probabilities = model.predict_proba(X)[:, 1]
-
-            results = data.copy()
-            results["Sepsis Risk Probability"] = probabilities
-            results["Predicted Sepsis"] = (
-                probabilities >= 0.13
-            ).astype(int)
-
-            st.markdown("### Prediction Results")
-            st.dataframe(results, use_container_width=True)
-
-            st.markdown("### Individual Prediction Explanation")
-            sample_index = st.number_input(
-                "Select row to explain",
-                min_value=0,
-                max_value=len(X) - 1,
-                value=0,
-                step=1
-            )
-
-            explainer = shap.TreeExplainer(model)
-            shap_values = np.asarray(
-                explainer.shap_values(
-                    X.iloc[[int(sample_index)]]
-                )
-            ).reshape(-1)
-
-            explanation = pd.DataFrame({
-                "Feature": features,
-                "SHAP value": shap_values
-            })
-            explanation["Absolute impact"] = (
-                explanation["SHAP value"].abs()
-            )
-            explanation = explanation.nlargest(
-                10, "Absolute impact"
-            ).sort_values("SHAP value")
-
-            st.caption(
-                "Positive SHAP values push the model output higher; "
-                "negative values push it lower. These are model "
-                "contributions, not causal effects."
-            )
-            st.bar_chart(
-                explanation.set_index("Feature")["SHAP value"],
-                horizontal=True,
-                height=450
-            )
-
-        else:
-            # Load the saved LSTM model and preprocessing objects.
-            lstm_model = load_lstm_model()
-            lstm_features = joblib.load(
-                os.path.join(MODEL_DIR, "lstm_features.joblib")
-            )
-            lstm_imputer = joblib.load(
-                os.path.join(MODEL_DIR, "lstm_imputer.joblib")
-            )
-            lstm_scaler = joblib.load(
-                os.path.join(MODEL_DIR, "lstm_scaler.joblib")
-            )
-
-            X_raw = data.reindex(
-                columns=lstm_features, fill_value=np.nan
-            )
-            X_imputed = lstm_imputer.transform(X_raw)
-            X_scaled = lstm_scaler.transform(X_imputed)
-
-            if len(X_scaled) < 24:
-                st.warning(
-                    "LSTM requires at least 24 hourly records."
-                )
-            else:
-                windows = np.lib.stride_tricks.sliding_window_view(
-                    X_scaled, window_shape=24, axis=0
-                ).transpose(0, 2, 1)
-
-                probabilities = lstm_model.predict(
-                    windows, verbose=0
-                ).reshape(-1)
-
-                results = data.iloc[23:].copy().reset_index(drop=True)
-                results["Sepsis Risk Probability"] = probabilities
-                results["Predicted Sepsis"] = (
-                    probabilities >= 0.50
-                ).astype(int)
-
-                st.markdown("### Prediction Results")
-                st.dataframe(results, use_container_width=True)
-
-                st.markdown("### Individual Prediction Explanation")
-                sample_index = st.number_input(
-                    "Select prediction row to explain",
-                    min_value=0,
-                    max_value=len(windows) - 1,
-                    value=0,
-                    step=1,
-                    key="lstm_sample_index"
-                )
-
-                sample_window = windows[int(sample_index)]
-                base_probability = float(
-                    probabilities[int(sample_index)]
-                )
-
-                impacts = []
-                for feature_index, feature_name in enumerate(
-                    lstm_features
-                ):
-                    masked_window = sample_window.copy()
-                    masked_window[:, feature_index] = 0
-
-                    changed_probability = float(
-                        lstm_model.predict(
-                            masked_window[np.newaxis, ...],
-                            verbose=0
-                        ).reshape(-1)[0]
-                    )
-
-                    impacts.append({
-                        "Feature": feature_name,
-                        "Prediction change": (
-                            changed_probability - base_probability
-                        ),
-                        "Absolute impact": abs(
-                            changed_probability - base_probability
-                        )
-                    })
-
-                # Keep the 10 features with the largest estimated impact.
-                impact_df = pd.DataFrame(impacts).nlargest(
-                    10, "Absolute impact"
-                ).sort_values("Prediction change")
+                st.dataframe(pd.DataFrame({
+                    "Row": np.arange(1, len(probability) + 1),
+                    "Predicted probability": probability,
+                    "Flag at threshold 0.13": probability >= 0.13
+                }), use_container_width=True)
 
                 st.caption(
-                    "Perturbation-based sensitivity estimate, not SHAP "
-                    "or evidence of causation."
-                )
-                st.bar_chart(
-                    impact_df.set_index("Feature")[
-                        "Prediction change"
-                    ],
-                    horizontal=True,
-                    height=450
+                    "Threshold 0.13 is a research threshold, "
+                    "not a clinical alarm threshold."
                 )
 
-    else:
-        st.info("Upload a CSV file to generate predictions.")
+                # Explain the highest-scoring row using SHAP.
+                st.markdown("### XGBoost: Individual Prediction Explanation")
+                row_idx = int(np.argmax(probability))
+                explainer = shap.TreeExplainer(model)
+                shap_values = np.asarray(
+                    explainer.shap_values(X_input.iloc[[row_idx]])
+                ).reshape(-1)
+
+                explanation = pd.DataFrame({
+                    "Feature": xgb_features,
+                    "SHAP value": shap_values
+                })
+                explanation["Absolute impact"] = explanation["SHAP value"].abs()
+                explanation = explanation.nlargest(10, "Absolute impact")
+                explanation = explanation.sort_values("SHAP value")
+
+                st.dataframe(explanation, use_container_width=True)
+                st.markdown("#### Feature Impact (Top 10)")
+                st.bar_chart(
+                    explanation.set_index("Feature")["SHAP value"],
+                    horizontal=True,
+                    height=450,
+                    use_container_width=True
+                )
+                st.caption(
+                    "Positive SHAP values increase the model output; "
+                    "negative values decrease it. These are model "
+                    "contributions, not causal effects."
+                )
+
+        else:
+            # LSTM needs chronological observations and 25 selected features.
+            if len(df) < 24:
+                st.error("LSTM requires at least 24 chronological hourly rows.")
+            elif not set(features).issubset(df.columns):
+                st.error("CSV is missing one or more required LSTM features.")
+            else:
+                # Apply the same saved imputer and scaler used during training.
+                imputer = joblib.load(MODELS / "lstm_imputer.joblib")
+                scaler = joblib.load(MODELS / "lstm_scaler.joblib")
+                X = scaler.transform(
+                    imputer.transform(df[features])
+                ).astype(np.float32)
+
+                # Build a rolling 24-hour window for each prediction.
+                windows = np.lib.stride_tricks.sliding_window_view(
+                    X, window_shape=24, axis=0
+                ).transpose(0, 2, 1)
+
+                lstm_model = load_lstm()
+                probabilities = lstm_model.predict(
+                    windows, verbose=0
+                ).ravel()
+
+                st.dataframe(pd.DataFrame({
+                    "Ending hour": np.arange(24, len(df) + 1),
+                    "Predicted probability": probabilities,
+                    "Flag at threshold 0.50": probabilities >= 0.50
+                }), use_container_width=True)
+
+                st.caption(
+                    "Threshold 0.50 is the current research threshold, "
+                    "not a clinical alarm threshold."
+                )
+
+                # Estimate individual LSTM feature influence by perturbation.
+                st.markdown("### LSTM: Individual Prediction Explanation")
+                best_idx = int(np.argmax(probabilities))
+                best_window = windows[best_idx:best_idx + 1]
+                baseline = float(probabilities[best_idx])
+
+                st.write(f"Highest predicted probability: {baseline:.4f}")
+                impacts = []
+
+                for feature_idx, feature_name in enumerate(features):
+                    # Replace one scaled feature across this 24-hour window.
+                    modified = best_window.copy()
+                    modified[:, :, feature_idx] = 0.0
+
+                    changed_prob = float(
+                        lstm_model.predict(modified, verbose=0).ravel()[0]
+                    )
+                    impacts.append({
+                        "Feature": feature_name,
+                        "Prediction change": changed_prob - baseline,
+                        "Absolute impact": abs(changed_prob - baseline)
+                    })
+
+                # Show the strongest estimated influences for this prediction.
+                impact_df = pd.DataFrame(impacts).nlargest(
+                    10, "Absolute impact"
+                )
+                st.dataframe(impact_df, use_container_width=True)
+
+                st.markdown("#### Feature Impact (Top 10)")
+                chart_data = impact_df.sort_values(
+                    "Prediction change"
+                ).set_index("Feature")["Prediction change"]
+
+                st.bar_chart(
+                    chart_data,
+                    horizontal=True,
+                    height=450,
+                    use_container_width=True
+                )
+                st.caption(
+                    "This is a perturbation-based explanation. "
+                    "It estimates model sensitivity, not causation "
+                    "or a clinical diagnosis."
+                )
+
 
 
 
