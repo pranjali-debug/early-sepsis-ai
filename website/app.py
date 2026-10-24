@@ -98,15 +98,56 @@ with tab3:
             missing = sorted(set(xgb_features) - set(df.columns))
             if missing:
                 st.error(f"Missing required columns: {', '.join(missing)}")
+            
             else:
+                # FINAL: Predict sepsis-label probabilities with tuned XGBoost.
                 model = load_xgb()
-                probability = model.predict_proba(df[xgb_features])[:, 1]
+                X_input = df[xgb_features]
+                probability = model.predict_proba(X_input)[:, 1]
+
+                # Display predictions for every uploaded row.
                 st.dataframe(pd.DataFrame({
                     "Row": np.arange(1, len(probability) + 1),
                     "Predicted probability": probability,
                     "Flag at threshold 0.13": probability >= 0.13
                 }))
-                st.caption("Threshold 0.13 is a research threshold, not a clinical alarm threshold.")
+
+                st.caption(
+                    "Threshold 0.13 is a research threshold, "
+                    "not a clinical alarm threshold."
+                )
+
+                # Explain the row with the highest predicted probability.
+                st.markdown("### Explanation for the highest-scoring row")
+                row_idx = int(np.argmax(probability))
+                explainer = shap.TreeExplainer(model)
+                shap_values = np.asarray(
+                    explainer.shap_values(X_input.iloc[[row_idx]])
+                ).reshape(-1)
+
+                # Rank features by absolute SHAP impact.
+                explanation = pd.DataFrame({
+                    "Feature": xgb_features,
+                    "SHAP value": shap_values
+                })
+                explanation["Absolute impact"] = (
+                    explanation["SHAP value"].abs()
+                )
+                explanation = explanation.sort_values(
+                    "Absolute impact", ascending=False
+                ).head(10).sort_values("SHAP value")
+
+                # Positive and negative bars show direction of influence.
+                st.bar_chart(
+                    explanation.set_index("Feature")["SHAP value"],
+                    horizontal=True
+                )
+                st.caption(
+                    "Positive SHAP values push the model output higher; "
+                    "negative values push it lower. These are contributions "
+                    "on the model's raw output scale, not percentage points."
+                )
+
 
         else:
             if len(df) < 24:
