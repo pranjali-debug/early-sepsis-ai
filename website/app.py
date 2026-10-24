@@ -231,19 +231,21 @@ with tab3:
             )
             st.dataframe(impact_df.head(10), use_container_width=True)
 
-                    # Display LSTM feature impacts in a responsive chart.
-        # Horizontal bars keep feature names readable when zooming.
+         # Display the top 10 features influencing this XGBoost prediction.
         st.markdown("#### Feature Impact (Top 10)")
 
-        chart_data = impact_df.head(10).set_index("Feature")[
-            "Prediction change"
-        ]
-
         st.bar_chart(
-            chart_data,
+            explanation.head(10).set_index("Feature")["SHAP value"],
             horizontal=True,
             height=450,
             use_container_width=True
+        )
+
+        # Explain how to interpret the SHAP contributions.
+        st.caption(
+            "Positive SHAP values push the model output higher; "
+            "negative values push it lower. These are contributions "
+            "on the model's raw output scale, not percentage points."
         )
 
 
