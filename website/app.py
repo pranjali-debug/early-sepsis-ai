@@ -62,25 +62,30 @@ with tab1:
 with tab2:
     st.subheader("Held-out Test Results")
     comparison = load_comparison()
+
+    # Display the evaluation metrics in a table.
     st.dataframe(comparison.round(4), use_container_width=True)
-        # Compare model metrics separately so small values remain visible.
+
+    # Compare PR-AUC and F1.
     st.markdown("#### Precision–Recall Performance")
     st.bar_chart(
         comparison.set_index("Model")[["PR-AUC", "F1"]],
+        stack=False,
         height=350
     )
 
-    # ROC-AUC uses a separate chart because its values are on a different scale.
+    # Compare ROC-AUC separately.
     st.markdown("#### ROC-AUC Comparison")
     st.bar_chart(
         comparison.set_index("Model")[["ROC-AUC"]],
         height=300
     )
+
+    # Explain the evaluation thresholds.
     st.caption(
         "Recall and precision use the listed thresholds. "
         "The tuned XGBoost threshold was selected using validation data."
     )
-
 with tab3:
     st.subheader("Predict from uploaded observations")
     st.write(
