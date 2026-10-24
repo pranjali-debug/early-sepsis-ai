@@ -209,9 +209,20 @@ with tab3:
             )
             st.dataframe(impact_df.head(10), use_container_width=True)
 
-            st.bar_chart(
-                impact_df.head(10).set_index("Feature")["Prediction change"]
-            )
+                    # Display LSTM feature impacts in a responsive chart.
+        # Horizontal bars keep feature names readable when zooming.
+        st.markdown("#### Feature Impact (Top 10)")
+
+        chart_data = impact_df.head(10).set_index("Feature")[
+            "Prediction change"
+        ]
+
+        st.bar_chart(
+            chart_data,
+            horizontal=True,
+            height=450,
+            use_container_width=True
+        )
 
 
 with tab4:
