@@ -234,8 +234,9 @@ with tab3:
          # Display the top 10 features influencing this XGBoost prediction.
         st.markdown("#### Feature Impact (Top 10)")
 
+                # Display the top 10 LSTM features by estimated impact.
         st.bar_chart(
-            explanation.head(10).set_index("Feature")["SHAP value"],
+            impact_df.head(10).set_index("Feature")["Prediction change"],
             horizontal=True,
             height=450,
             use_container_width=True
