@@ -167,6 +167,51 @@ with tab3:
                     "Predicted probability": probabilities,
                     "Flag at threshold 0.50": probabilities >= 0.50
                 }))
+                            # Explain the highest-scoring LSTM prediction.
+            st.subheader("LSTM: Individual Prediction Explanation")
+
+            # Select the window with the highest predicted probability.
+            best_idx = int(np.argmax(probabilities))
+            best_window = windows[best_idx:best_idx + 1]
+
+            # Explain how input features influence this prediction.
+            st.write(
+                f"Highest predicted probability: "
+                f"{probabilities[best_idx]:.4f}"
+            )
+            st.caption(
+                "This is a perturbation-based explanation, not a "
+                "clinical diagnosis."
+            )
+
+            # Estimate feature influence by masking one feature at a time.
+            baseline = float(probabilities[best_idx])
+            impacts = []
+
+            for feature_idx, feature_name in enumerate(features):
+                # Replace this feature with zero across the 24-hour window.
+                modified = best_window.copy()
+                modified[:, :, feature_idx] = 0.0
+
+                # Measure the change in model prediction.
+                changed_prob = float(
+                    load_lstm().predict(modified, verbose=0).ravel()[0]
+                )
+                impacts.append({
+                    "Feature": feature_name,
+                    "Prediction change": changed_prob - baseline,
+                    "Absolute impact": abs(changed_prob - baseline)
+                })
+
+            # Display the features with the largest estimated influence.
+            impact_df = pd.DataFrame(impacts).sort_values(
+                "Absolute impact", ascending=False
+            )
+            st.dataframe(impact_df.head(10), use_container_width=True)
+
+            st.bar_chart(
+                impact_df.head(10).set_index("Feature")["Prediction change"]
+            )
 
 
 with tab4:
