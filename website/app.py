@@ -63,7 +63,19 @@ with tab2:
     st.subheader("Held-out Test Results")
     comparison = load_comparison()
     st.dataframe(comparison.round(4), use_container_width=True)
-    st.bar_chart(comparison.set_index("Model")[["PR-AUC", "ROC-AUC", "F1"]])
+        # Compare model metrics separately so small values remain visible.
+    st.markdown("#### Precision–Recall Performance")
+    st.bar_chart(
+        comparison.set_index("Model")[["PR-AUC", "F1"]],
+        height=350
+    )
+
+    # ROC-AUC uses a separate chart because its values are on a different scale.
+    st.markdown("#### ROC-AUC Comparison")
+    st.bar_chart(
+        comparison.set_index("Model")[["ROC-AUC"]],
+        height=300
+    )
     st.caption(
         "Recall and precision use the listed thresholds. "
         "The tuned XGBoost threshold was selected using validation data."
