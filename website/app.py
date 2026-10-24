@@ -87,6 +87,7 @@ with tab2:
         "The tuned XGBoost threshold was selected using validation data."
     )
 
+
 with tab3:
     st.subheader("Predict Sepsis Risk")
 
@@ -108,8 +109,29 @@ with tab3:
         st.dataframe(data.head(), use_container_width=True)
 
         if model_choice == "Tuned XGBoost":
-            model = load_xgb_model()
-            features = load_features()
+            # Load the tuned XGBoost model and feature list.
+            model_path = os.path.join(
+                MODEL_DIR, "xgboost_tuned_candidate.json"
+            )
+            model = xgb.XGBClassifier()
+            model.load_model(model_path)
+
+            features_path = os.path.join(
+                MODEL_DIR, "lstm_features.joblib"
+            )
+            # Use the XGBoost feature list if your project saves one.
+            if os.path.exists(
+                os.path.join(MODEL_DIR, "xgb_features.joblib")
+            ):
+                features = joblib.load(
+                    os.path.join(MODEL_DIR, "xgb_features.joblib")
+                )
+            else:
+                st.error(
+                    "XGBoost feature list file is missing. "
+                    "Use your project's saved XGBoost feature list."
+                )
+                st.stop()
 
             X = data.reindex(columns=features, fill_value=0)
             probabilities = model.predict_proba(X)[:, 1]
@@ -123,9 +145,7 @@ with tab3:
             st.markdown("### Prediction Results")
             st.dataframe(results, use_container_width=True)
 
-            # Explain one row using SHAP.
             st.markdown("### Individual Prediction Explanation")
-
             sample_index = st.number_input(
                 "Select row to explain",
                 min_value=0,
@@ -136,18 +156,18 @@ with tab3:
 
             explainer = shap.TreeExplainer(model)
             shap_values = np.asarray(
-                explainer.shap_values(X.iloc[[int(sample_index)]])
+                explainer.shap_values(
+                    X.iloc[[int(sample_index)]]
+                )
             ).reshape(-1)
 
             explanation = pd.DataFrame({
                 "Feature": features,
                 "SHAP value": shap_values
             })
-
             explanation["Absolute impact"] = (
                 explanation["SHAP value"].abs()
             )
-
             explanation = explanation.nlargest(
                 10, "Absolute impact"
             ).sort_values("SHAP value")
@@ -157,12 +177,10 @@ with tab3:
                 "negative values push it lower. These are model "
                 "contributions, not causal effects."
             )
-
             st.bar_chart(
                 explanation.set_index("Feature")["SHAP value"],
                 horizontal=True,
-                height=450,
-                use_container_width=True
+                height=450
             )
 
         else:
@@ -178,7 +196,6 @@ with tab3:
                 os.path.join(MODEL_DIR, "lstm_scaler.joblib")
             )
 
-            # Prepare features and create 24-hour rolling windows.
             X_raw = data.reindex(
                 columns=lstm_features, fill_value=np.nan
             )
@@ -207,11 +224,7 @@ with tab3:
                 st.markdown("### Prediction Results")
                 st.dataframe(results, use_container_width=True)
 
-                # Estimate feature influence by masking each feature
-                # throughout the 24-hour window and measuring the
-                # resulting change in predicted probability.
                 st.markdown("### Individual Prediction Explanation")
-
                 sample_index = st.number_input(
                     "Select prediction row to explain",
                     min_value=0,
@@ -227,7 +240,6 @@ with tab3:
                 )
 
                 impacts = []
-
                 for feature_index, feature_name in enumerate(
                     lstm_features
                 ):
@@ -257,20 +269,20 @@ with tab3:
                 ).sort_values("Prediction change")
 
                 st.caption(
-                    "This is a perturbation-based sensitivity estimate, "
-                    "not SHAP. It shows how masking a feature changes "
-                    "the model prediction; it does not establish causation."
+                    "Perturbation-based sensitivity estimate, not SHAP "
+                    "or evidence of causation."
                 )
-
                 st.bar_chart(
-                    impact_df.set_index("Feature")["Prediction change"],
+                    impact_df.set_index("Feature")[
+                        "Prediction change"
+                    ],
                     horizontal=True,
-                    height=450,
-                    use_container_width=True
+                    height=450
                 )
 
     else:
         st.info("Upload a CSV file to generate predictions.")
+
 
 
 
