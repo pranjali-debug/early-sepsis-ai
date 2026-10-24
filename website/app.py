@@ -127,14 +127,45 @@ with tab3:
                     "Flag at threshold 0.50": probabilities >= 0.50
                 }))
 
+
 with tab4:
     st.subheader("Global Feature Importance (SHAP)")
+
     chart = RESULTS / "shap_feature_importance.png"
+
     if chart.exists():
-        st.image(str(chart), caption="Mean absolute SHAP values on a test-record sample")
+        st.image(
+            str(chart),
+            caption="Mean absolute SHAP values on a test-record sample",
+            width="stretch"
+        )
     else:
         st.info("SHAP chart not found. Generate it from the notebook first.")
-    st.caption(
-        "SHAP describes model influence, not causation. "
-        "Time-related features such as ICULOS may strongly influence predictions."
+
+    st.markdown("### How to understand this chart")
+
+    st.write(
+        "SHAP explains how strongly each feature influences the "
+        "model's predictions across the sampled records. Longer bars "
+        "indicate greater average influence."
     )
+
+    st.markdown("**Key observations from our results:**")
+    st.markdown("""
+    - **ICULOS:** Time elapsed in the ICU.
+    - **HospAdmTime:** Time between hospital admission and ICU admission,
+      represented in the dataset as a time value.
+    - **Temp_mean6:** Six-hour rolling average body temperature.
+    - **Resp_mean6:** Six-hour rolling average respiratory rate.
+    """)
+
+    st.info(
+        "Important: Feature importance shows model influence, not causation. "
+        "It does not prove that a feature causes sepsis or confirm a diagnosis."
+    )
+
+    st.caption(
+        "These explanations summarize the model's behavior on a sample; "
+        "they are not individual-patient explanations."
+    )
+
