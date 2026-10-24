@@ -125,7 +125,7 @@ Reyna, M. A., et al. (2019). *Early Prediction of Sepsis from Clinical Data: The
 
 ## Author
 
-**Pranjali Vijay Kumar Sadafule**  
+**Pranjali Vijaykumar Sadafule**  
 B.Tech, Computer Science Engineering — AI Specialization
 
 [GitHub Profile](https://github.com/pranjali-debug)
